@@ -47,4 +47,20 @@ describe('CurrencyInput', () => {
     expect(onChange).toHaveBeenLastCalledWith('0')
     expect(input).toHaveValue('0,00')
   })
+
+  it('enforces minimum and step constraints before form submission', () => {
+    function Wrapper() {
+      const [value, setValue] = useState('5000')
+      return <CurrencyInput aria-label="Salário" min="5000" step="50" value={value} onChange={setValue} />
+    }
+    render(<Wrapper />)
+    const input = screen.getByRole('textbox', { name: 'Salário' })
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '5001' } })
+    expect(input).toBeInvalid()
+
+    fireEvent.change(input, { target: { value: '5050' } })
+    expect(input).toBeValid()
+  })
 })

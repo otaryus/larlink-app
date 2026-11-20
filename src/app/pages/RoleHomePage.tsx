@@ -23,10 +23,14 @@ import { ContractVersionPanel } from './ContractVersionPanel'
 import { ContractRatingPanel } from './ContractRatingPanel'
 import { ContractSignatureForm } from './ContractSignatureForm'
 import { NegotiationCard } from './NegotiationCard'
+import { ageAt, isValidDate } from '../../shared/domain/dates'
+import { MAX_CONTRACT_MONTHS, MIN_HOUSEKEEPER_AGE, MINIMUM_WAGE_MZN } from '../../shared/domain/policies'
+import { isIntegerBetween, isValidEmail, isValidFullName, isValidPhone } from '../../shared/domain/validators'
 
 type WorkerProposalRow = WorkspaceNegotiation
 
 function tomorrow() { const date = new Date(); date.setDate(date.getDate()+1); return date.toISOString().slice(0,10) }
+function today() { return new Date().toISOString().slice(0,10) }
 function normalizedArea(value:string) { const normalized=value.trim().toLocaleLowerCase('pt'); return ({maputo:'cidade de maputo',matola:'província de maputo',beira:'sofala','xai-xai':'gaza'} as Record<string,string>)[normalized]??normalized }
 function validIncidentFile(file:File|null) { return !file || (file.size<=5_000_000&&['application/pdf','image/jpeg','image/png'].includes(file.type)) }
 function statusLabel(status:string) { return ({PENDING:'Pedido directo à candidata',APPROVED:'À espera da trabalhadora',EM_NEGOCIACAO:'Em negociação salarial',WORKER_ACCEPTED:'Aceite pela trabalhadora',WORKER_DECLINED:'Recusado pela trabalhadora',REJECTED:'Não aprovado',CANCELLED:'Cancelado'} as Record<string,string>)[status] ?? status }
@@ -181,7 +185,10 @@ export function RoleHomePage() {
       if(!district){setError('Seleccione o distrito da área de trabalho.');setSearching(false);setBusy(false);return}
       if(endTime<=startTime){setError('A hora de saída deve ser posterior à hora de entrada.');setSearching(false);setBusy(false);return}
       if(taskScope.trim().length<15){setError('Descreva as tarefas desejadas com pelo menos 15 caracteres.');setSearching(false);setBusy(false);return}
-      if(!monthlySalary||Number(monthlySalary)<5000||!Number.isInteger(Number(monthlySalary))||Number(monthlySalary)%50!==0){setError('Indique um salário mensal a partir de 5.000 MZN, em incrementos de 50 MT.');setSearching(false);setBusy(false);return}
+      if(!monthlySalary||Number(monthlySalary)<MINIMUM_WAGE_MZN||!Number.isInteger(Number(monthlySalary))||Number(monthlySalary)%50!==0){setError(`Indique um salário mensal a partir de ${MINIMUM_WAGE_MZN.toLocaleString('pt-MZ')} MZN, em incrementos de 50 MT.`);setSearching(false);setBusy(false);return}
+      if(maxSalary&&Number(maxSalary)>0&&(!Number.isFinite(Number(maxSalary))||Number(maxSalary)<MINIMUM_WAGE_MZN)){setError(`O limite salarial deve ser igual ou superior a ${MINIMUM_WAGE_MZN.toLocaleString('pt-MZ')} MT.`);setSearching(false);setBusy(false);return}
+      if(!isValidDate(startDate)||startDate<=today()){setError('Escolha uma data de início futura.');setSearching(false);setBusy(false);return}
+      if(!isIntegerBetween(Number(durationMonths),1,MAX_CONTRACT_MONTHS)){setError(`A duração deve ser entre 1 e ${MAX_CONTRACT_MONTHS} meses.`);setSearching(false);setBusy(false);return}
       const result = await workspaceUseCases.searchMatching({ city, district, neighborhood:neighborhood.trim()||undefined, skills:selectedSkillCodes, availability:requiredDays, maxSalary:Number(maxSalary)>0 ? Number(maxSalary) : undefined, text:taskScope.trim() || undefined })
       // Keep the presentation safe even when an older API process is still running.
       const eligible = result.filter(w => w.status==='APPROVED'
@@ -197,12 +204,29 @@ export function RoleHomePage() {
 
   async function saveClient(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
+    if (!isValidPhone(profileForm.phone) || profileForm.address.trim().length < 5 || profileForm.address.trim().length > 500) {
+      setError('Indique um telemóvel moçambicano válido e um endereço entre 5 e 500 caracteres.')
+      setBusy(false)
+      return
+    }
     try { await workspaceUseCases.saveClientProfile(profileForm); setClient(profileForm); setSuccess('Contactos guardados. Agora já pode pesquisar profissionais.'); setRefresh((v)=>v+1) }
     catch(e) { setError((e as Error).message) } finally { setBusy(false) }
   }
 
   async function saveWorker(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
+    const salary = Number(workerForm.expectedSalary)
+    const experience = Number(workerForm.yearsOfExperience)
+    if (!isValidDate(workerForm.birthDate) || ageAt(workerForm.birthDate, new Date()) < MIN_HOUSEKEEPER_AGE
+      || !isValidPhone(workerForm.phone) || !workerForm.city.trim() || !workerForm.district.trim()
+      || workerForm.neighborhood.trim().length < 3 || workerForm.neighborhood.trim().length > 100
+      || workerForm.skills.length === 0 || workerForm.availability.length === 0
+      || !Number.isInteger(salary) || salary < MINIMUM_WAGE_MZN || salary % 50 !== 0
+      || !isIntegerBetween(experience, 0, 50)) {
+      setError('Revise os dados: idade mínima de 18 anos, telefone válido, localização e competências obrigatórias, salário a partir de 5.000 MT em passos de 50 e experiência entre 0 e 50 anos.')
+      setBusy(false)
+      return
+    }
     try {
       const created = await workspaceUseCases.saveWorkerProfile({ profile: workerForm, existing: Boolean(worker) })
       setWorker(created); setWorkerForm({...workerForm,expectedSalary:String(created.expectedSalary)}); setSuccess(worker ? 'Perfil actualizado. A agência irá validar as alterações.' : 'Perfil enviado. A agência irá analisá-lo e atualizar este estado.')
@@ -229,9 +253,11 @@ export function RoleHomePage() {
   async function submitRequest(housekeeper:Worker) {
     setError(''); setRequestError(null)
     if(taskScope.trim().length<15){setRequestError({workerId:housekeeper.id,message:'Descreva as tarefas desejadas com pelo menos 15 caracteres.'});return}
-    if(!monthlySalary||Number(monthlySalary)<5000){setRequestError({workerId:housekeeper.id,message:'Indique um salário mensal proposto a partir de 5.000 MZN.'});return}
+    if(!monthlySalary||Number(monthlySalary)<MINIMUM_WAGE_MZN){setRequestError({workerId:housekeeper.id,message:`Indique um salário mensal proposto a partir de ${MINIMUM_WAGE_MZN.toLocaleString('pt-MZ')} MZN.`});return}
     if(!Number.isInteger(Number(monthlySalary))||Number(monthlySalary)%50!==0){setRequestError({workerId:housekeeper.id,message:'O salário proposto deve ser um múltiplo de 50 MT.'});return}
     if(!selectedTaskIds.length){setRequestError({workerId:housekeeper.id,message:'Seleccione pelo menos uma tarefa solicitada.'});return}
+    if(!selectedSkillCodes.length||!requiredDays.length||!district||!isValidDate(startDate)||startDate<=today()){setRequestError({workerId:housekeeper.id,message:'Confirme a localização, as competências, os dias de trabalho e uma data futura para iniciar.'});return}
+    if(!isIntegerBetween(Number(durationMonths),1,MAX_CONTRACT_MONTHS)){setRequestError({workerId:housekeeper.id,message:`A duração deve ser entre 1 e ${MAX_CONTRACT_MONTHS} meses.`});return}
     setBusy(true)
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 25000)
@@ -253,7 +279,7 @@ export function RoleHomePage() {
   async function terminateContract(id:string){const reason=window.prompt('Indique o motivo do encerramento (mínimo 10 caracteres):');if(!reason||reason.trim().length<10)return;setError('');setBusy(true);try{await workspaceUseCases.actions.terminateContract(id,reason.trim());setSuccess('Contrato encerrado. A disponibilidade da trabalhadora foi actualizada.');setRefresh(v=>v+1)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   async function requestContractChanges(id:string){const note=window.prompt('Explique os ajustes necessários na minuta (mínimo 10 caracteres):')??'';if(note.trim().length<10)return;setError('');setBusy(true);try{await workspaceUseCases.actions.reviewContract(id,false,note);setSuccess('Pedido de alteração enviado às partes.');setRefresh(v=>v+1)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   async function downloadContract(id:string){setError('');try{await workspaceUseCases.actions.downloadContract(id)}catch(e){setError((e as Error).message)}}
-  async function createAgent(event:FormEvent){event.preventDefault();setError('');setNewCredentials(null);if(agentForm.role==='CLIENT'&&!agentForm.photo){setError('Carregue a fotografia do cliente para continuar.');return}setBusy(true);try{const body=new FormData();const {photo,...account}=agentForm;body.append('account',new Blob([JSON.stringify(account)],{type:'application/json'}));if(photo)body.append('photo',photo);const created=await workspaceUseCases.actions.createAgent(body);setNewCredentials(created);setAgentForm({name:'',email:'',role:'SECRETARY',phone:'',address:'',photo:null});setSuccess('Conta criada. A palavra-passe temporária é apresentada uma única vez.')}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+  async function createAgent(event:FormEvent){event.preventDefault();setError('');setNewCredentials(null);if(!isValidFullName(agentForm.name)){setError('Indique o nome e apelido da pessoa.');return}if(!isValidEmail(agentForm.email)){setError('Indique um endereço de email válido.');return}if(agentForm.role==='CLIENT'&&!isValidPhone(agentForm.phone)){setError('Indique um telemóvel moçambicano válido.');return}if(agentForm.role==='CLIENT'&&agentForm.address.trim().length<5){setError('Indique um endereço com pelo menos 5 caracteres.');return}if(agentForm.role==='CLIENT'&&!agentForm.photo){setError('Carregue a fotografia do cliente para continuar.');return}if(agentForm.photo&&(!['image/jpeg','image/png','image/webp'].includes(agentForm.photo.type)||agentForm.photo.size>3_000_000)){setError('Escolha uma fotografia JPG, PNG ou WEBP com no máximo 3 MB.');return}setBusy(true);try{const body=new FormData();const {photo,...account}=agentForm;body.append('account',new Blob([JSON.stringify(account)],{type:'application/json'}));if(photo)body.append('photo',photo);const created=await workspaceUseCases.actions.createAgent(body);setNewCredentials(created);setAgentForm({name:'',email:'',role:'SECRETARY',phone:'',address:'',photo:null});setSuccess('Conta criada. A palavra-passe temporária é apresentada uma única vez.')}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   async function closeIncident(id:string){setError('');setBusy(true);try{await workspaceUseCases.actions.updateIncidentStatus(id,'ENCERRADA','Ocorrência encerrada pela agência.');setRefresh(v=>v+1)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   async function updateIncidentStatus(id:string,status:string){const decision=window.prompt('Registe uma nota para o histórico desta ocorrência:')??'';setError('');setBusy(true);try{await workspaceUseCases.actions.updateIncidentStatus(id,status,decision);setRefresh(v=>v+1)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   async function reportIncident(contractId:string,description:string,type='OTHER'){const file=incidentFiles[contractId];setError('');if(!validIncidentFile(file)){setError('Anexe um PDF, JPEG ou PNG até 5 MB.');return}setBusy(true);try{await workspaceUseCases.actions.reportIncident({contractId,description,type,evidence:file});setIncidentFiles({...incidentFiles,[contractId]:null});setSuccess('Ocorrência enviada em confidencialidade à agência.');setRefresh(v=>v+1)}catch(e){setError((e as Error).message);setRefresh(v=>v+1)}finally{setBusy(false)}}

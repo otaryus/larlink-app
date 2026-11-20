@@ -4,6 +4,7 @@ import { CITIES, SKILLS, WEEKDAYS, type Skill, type Weekday } from '../../module
 import { profileUseCases } from '../apiContainer'
 import type { ClientProfile, WorkerProfileDraft } from '../../modules/profile/domain/Profile'
 import { CurrencyInput } from '../../shared/ui/CurrencyInput'
+import { ValidationError } from '../../shared/domain/errors'
 
 export function ProfileSettingsPage() {
   const { session } = useAuth()
@@ -41,7 +42,9 @@ export function ProfileSettingsPage() {
       }
       setSuccess(worker ? 'Perfil actualizado e enviado para nova validação.' : 'Contactos actualizados.')
     } catch (cause) {
-      setError((cause as Error).message)
+      setError(cause instanceof ValidationError
+        ? Object.values(cause.fields).join(' ')
+        : (cause as Error).message)
     } finally {
       setBusy(false)
     }
@@ -65,12 +68,12 @@ export function ProfileSettingsPage() {
       {worker && workerData && (
         <form className="workspace-card workspace-form" onSubmit={save}>
           <h2>Informações profissionais</h2>
-          <label>Data de nascimento<input required type="date" value={workerData.birthDate} onChange={(event) => setWorkerData({ ...workerData, birthDate: event.target.value })} /></label>
-          <label>Telefone<input required value={workerData.phone} onChange={(event) => setWorkerData({ ...workerData, phone: event.target.value })} /></label>
-          <label>Cidade<select value={workerData.city} onChange={(event) => setWorkerData({ ...workerData, city: event.target.value })}>{CITIES.map((city) => <option key={city}>{city}</option>)}</select></label>
-          <label>Bairro<input required value={workerData.neighborhood} onChange={(event) => setWorkerData({ ...workerData, neighborhood: event.target.value })} /></label>
-          <label>Salário mensal pretendido (MT)<CurrencyInput required min="5000" step="50" value={workerData.expectedSalary} onChange={(value) => setWorkerData({ ...workerData, expectedSalary: Number(value) })} /></label>
-          <label>Anos de experiência<input required type="number" min="0" max="50" value={workerData.yearsOfExperience} onChange={(event) => setWorkerData({ ...workerData, yearsOfExperience: Number(event.target.value) })} /></label>
+          <label>Data de nascimento<input required type="date" max={new Date().toISOString().slice(0, 10)} value={workerData.birthDate} onChange={(event) => setWorkerData({ ...workerData, birthDate: event.target.value })} /></label>
+          <label>Telefone<input required type="tel" autoComplete="tel" maxLength={20} value={workerData.phone} onChange={(event) => setWorkerData({ ...workerData, phone: event.target.value })} /></label>
+          <label>Cidade<select required value={workerData.city} onChange={(event) => setWorkerData({ ...workerData, city: event.target.value })}>{CITIES.map((city) => <option key={city}>{city}</option>)}</select></label>
+          <label>Bairro<input required minLength={3} maxLength={100} value={workerData.neighborhood} onChange={(event) => setWorkerData({ ...workerData, neighborhood: event.target.value })} /></label>
+          <label>Salário mensal pretendido (MT)<CurrencyInput required min="5000" step="50" value={workerData.expectedSalary} onChange={(value) => setWorkerData({ ...workerData, expectedSalary: value })} /></label>
+          <label>Anos de experiência<input required type="number" min="0" max="50" step="1" value={workerData.yearsOfExperience} onChange={(event) => setWorkerData({ ...workerData, yearsOfExperience: event.target.value })} /></label>
           <fieldset>
             <legend>Competências</legend>
             <div className="profile-choice-grid">
@@ -94,8 +97,8 @@ export function ProfileSettingsPage() {
       {!worker && (
         <form className="workspace-card workspace-form" onSubmit={save}>
           <h2>Contactos do cliente</h2>
-          <label>Telefone<input required value={clientData.phone} onChange={(event) => setClientData({ ...clientData, phone: event.target.value })} /></label>
-          <label>Endereço de prestação do serviço<input required minLength={5} value={clientData.address} onChange={(event) => setClientData({ ...clientData, address: event.target.value })} /></label>
+          <label>Telefone<input required type="tel" autoComplete="tel" maxLength={20} value={clientData.phone} onChange={(event) => setClientData({ ...clientData, phone: event.target.value })} /></label>
+          <label>Endereço de prestação do serviço<input required minLength={5} maxLength={500} autoComplete="street-address" value={clientData.address} onChange={(event) => setClientData({ ...clientData, address: event.target.value })} /></label>
           <button className="btn btn-primary" disabled={busy}>Guardar contactos</button>
         </form>
       )}

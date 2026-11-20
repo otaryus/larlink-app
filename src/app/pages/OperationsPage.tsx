@@ -26,6 +26,10 @@ export function OperationsPage(){
   const [reportFilters,setReportFilters]=useState({from:'',to:'',contractId:'',clientId:'',workerId:''})
   const title=pathname==='/propostas'?'Propostas salariais':pathname==='/faltas'?'Faltas e justificações':pathname==='/extras'?'Serviços adicionais':pathname==='/pagamentos'?'Pagamentos mensais':pathname==='/financeiro'?'Demonstrativo mensal':pathname==='/tarefas'?'Catálogo de tarefas':pathname==='/relatorios'?'Relatórios da agência':pathname==='/auditoria'?'Histórico administrativo':pathname==='/data-hora'?'Data e hora':pathname==='/configuracoes-financeiras'?'Regras financeiras':'Notificações'
   useEffect(() => {
+    if (pathname === '/relatorios' && reportFilters.from && reportFilters.to && reportFilters.from > reportFilters.to) {
+      setError('A data inicial do relatório deve ser anterior ou igual à data final.')
+      return
+    }
     let live = true
     setError('')
     void workspaceUseCases.loadOperations({ pathname, role, reportFilters })
@@ -49,7 +53,7 @@ export function OperationsPage(){
     return () => { live = false }
   }, [pathname, refresh, role, reportFilters])
   async function action(run:()=>Promise<unknown>,success:string){setBusy(true);setError('');setMessage('');try{await run();setMessage(success);setRefresh(x=>x+1)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
-  function submit(event:FormEvent,run:()=>Promise<unknown>,success:string){event.preventDefault();void action(run,success)}
+  function submit(event:FormEvent<HTMLFormElement>,run:()=>Promise<unknown>,success:string){event.preventDefault();if(!event.currentTarget.checkValidity()){event.currentTarget.reportValidity();return}void action(run,success)}
   function decideAbsence(id:string,decision:'JUSTIFICADA'|'NAO_JUSTIFICADA'){const note=absenceDecisionNotes[id]?.trim()??'';void action(()=>workspaceUseCases.actions.decideAbsence(id,decision,note),decision==='JUSTIFICADA'?'Falta justificada e decisão registada.':'Falta não justificada e decisão registada.')}
   function submitAbsenceJustification(id:string){const text=absenceJustifications[id]?.trim()??'';const evidence=absenceEvidenceFiles[id];if(!text&&!evidence){setError('Escreva a justificação ou anexe um comprovativo.');return}void action(()=>workspaceUseCases.actions.submitAbsenceJustification(id,text,evidence).then(()=>{setAbsenceJustifications(current=>({...current,[id]:''}));setAbsenceEvidenceFiles(current=>({...current,[id]:null}))}),'Justificação enviada à agência para análise.')}
   function declareAbsenceHasNoJustification(id:string){void action(()=>workspaceUseCases.actions.declareAbsenceHasNoJustification(id),'Declaração registada e enviada à agência para decisão.')}

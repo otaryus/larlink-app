@@ -92,6 +92,7 @@ describe('workspace profile and search use cases', () => {
       const api = workspaceApi((path) => path === '/api/requests' ? { id: 'request-1' } : {})
       const actions = makeWorkspaceActions(api)
       const signal = new AbortController().signal
+      const startDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
       const request = {
         housekeeperId: 'worker-1',
         requiredSkills: ['CLEANING'],
@@ -102,7 +103,7 @@ describe('workspace profile and search use cases', () => {
         neighborhood: '',
         startTime: '08:00',
         endTime: '16:00',
-        startDate: '2026-11-20',
+        startDate,
         taskScope: 'House cleaning and organization',
         monthlySalary: 7000,
         durationMonths: 12,
@@ -121,16 +122,47 @@ describe('workspace profile and search use cases', () => {
       expect(api.request).toHaveBeenNthCalledWith(2, '/api/requests/request-1/worker-decision?accepted=true', { method: 'PATCH' })
     })
 
+    it('does not send an invalid hire request to the API', async () => {
+      const api = workspaceApi(() => ({}))
+      const actions = makeWorkspaceActions(api)
+
+      expect(() => actions.submitHireRequest({
+        housekeeperId: '',
+        requiredSkills: [],
+        taskIds: [],
+        requiredDays: [],
+        city: '',
+        district: '',
+        neighborhood: '',
+        startTime: '16:00',
+        endTime: '08:00',
+        startDate: 'not-a-date',
+        taskScope: 'short',
+        monthlySalary: 5001,
+        durationMonths: 25,
+        hoursPerDay: 0,
+        notes: '',
+      }, new AbortController().signal)).toThrowError(expect.objectContaining({
+        fields: expect.objectContaining({
+          housekeeperId: expect.any(String),
+          startDate: expect.any(String),
+          monthlySalary: expect.any(String),
+          durationMonths: expect.any(String),
+        }),
+      }))
+      expect(api.request).not.toHaveBeenCalled()
+    })
+
     it('creates an incident and then attaches supporting evidence as a message', async () => {
       const api = workspaceApi((path) => path === '/api/incidents' ? { id: 'incident-1' } : {})
       const actions = makeWorkspaceActions(api)
       const evidence = new File(['evidence'], 'evidence.pdf', { type: 'application/pdf' })
 
-      await actions.reportIncident({ contractId: 'contract-1', description: 'Issue', type: 'OTHER', evidence })
+      await actions.reportIncident({ contractId: 'contract-1', description: 'Relato detalhado da ocorrência', type: 'OTHER', evidence })
 
       expect(api.request).toHaveBeenNthCalledWith(1, '/api/incidents', {
         method: 'POST',
-        body: JSON.stringify({ contractId: 'contract-1', description: 'Issue', type: 'OTHER' }),
+        body: JSON.stringify({ contractId: 'contract-1', description: 'Relato detalhado da ocorrência', type: 'OTHER' }),
       })
       const message = vi.mocked(api.request).mock.calls[1][1]
       expect(vi.mocked(api.request).mock.calls[1][0]).toBe('/api/incidents/incident-1/messages')

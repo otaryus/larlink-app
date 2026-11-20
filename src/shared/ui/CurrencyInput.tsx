@@ -1,4 +1,4 @@
-import { useState, type FocusEvent, type InputHTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type FocusEvent, type InputHTMLAttributes } from 'react'
 import { formatCurrencyInput, parseCurrencyInput } from '../domain/currencyInput'
 
 interface Props extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
@@ -24,16 +24,45 @@ function currencyDraft(value: string): string {
 export function CurrencyInput({ value, onChange, onFocus, onBlur, ...props }: Props) {
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function setAmountValidity(input: HTMLInputElement, amountText: string) {
+    const amount = Number(parseCurrencyInput(amountText))
+    const min = props.min === undefined ? undefined : Number(props.min)
+    const max = props.max === undefined ? undefined : Number(props.max)
+    const step = props.step === undefined || props.step === 'any' ? undefined : Number(props.step)
+
+    let message = ''
+    if (!Number.isFinite(amount)) message = 'Indique um valor numérico válido.'
+    else if (min !== undefined && amount < min) message = `O valor deve ser igual ou superior a ${min}.`
+    else if (max !== undefined && amount > max) message = `O valor deve ser igual ou inferior a ${max}.`
+    else if (step && Number.isFinite(step)) {
+      const base = min ?? 0
+      const steps = (amount - base) / step
+      if (Math.abs(steps - Math.round(steps)) > 1e-8)
+        message = `Indique um valor em incrementos de ${step}.`
+    }
+
+    input.setCustomValidity(message)
+  }
+
+  useEffect(() => {
+    const input = inputRef.current
+    if (input) setAmountValidity(input, focused ? draft || editableValue(value) : editableValue(value))
+  }, [draft, focused, props.max, props.min, props.step, value])
 
   function handleFocus(event: FocusEvent<HTMLInputElement>) {
     setFocused(true)
-    setDraft(editableValue(value))
+    const next = editableValue(value)
+    setDraft(next)
+    setAmountValidity(event.currentTarget, next)
     event.currentTarget.select()
     onFocus?.(event)
   }
 
   function handleBlur(event: FocusEvent<HTMLInputElement>) {
     const parsed = parseCurrencyInput(draft || '0')
+    setAmountValidity(event.currentTarget, parsed)
     onChange(parsed)
     setDraft(formatCurrencyInput(parsed))
     setFocused(false)
@@ -43,6 +72,7 @@ export function CurrencyInput({ value, onChange, onFocus, onBlur, ...props }: Pr
   return (
     <input
       {...props}
+      ref={inputRef}
       type="text"
       inputMode="decimal"
       value={focused ? draft || '0,00' : formatCurrencyInput(value)}
@@ -51,6 +81,7 @@ export function CurrencyInput({ value, onChange, onFocus, onBlur, ...props }: Pr
       onChange={(event) => {
         const next = currencyDraft(event.target.value)
         setDraft(next)
+        setAmountValidity(event.currentTarget, next)
         onChange(parseCurrencyInput(next))
       }}
     />

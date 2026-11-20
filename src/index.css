@@ -585,3 +585,53 @@ form > .btn { align-self: flex-start; }
   .workspace-stat-grid, .scope-details { grid-template-columns: 1fr; }
   .workspace-contract header { align-items: flex-start; flex-direction: column; }
 }
+
+@media (max-width: 760px) {
+  .role-topbar { align-items: flex-start; gap: 12px; padding: 12px 16px; }
+  .workspace-page, .role-workspace { width: 100%; min-width: 0; }
+  .workspace-card { padding: 18px; }
+  .workspace-card-heading, .contract-rating-panel > header { align-items: flex-start; flex-wrap: wrap; }
+  .workspace-search { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-search > button { grid-column: 1 / -1; width: 100%; }
+  .workspace-actions { flex-wrap: wrap; }
+  .workspace-actions .btn { flex: 1 1 auto; }
+  .salary-stepper { flex-wrap: wrap; }
+  .salary-stepper input { min-width: 0; flex: 1 1 140px; }
+  .workspace-row-main { overflow-wrap: anywhere; }
+  .workspace-contract pre { max-width: 100%; }
+  .temporary-credentials { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+  .role-topbar { min-height: 0; padding: 10px 12px; }
+  .workspace-card { padding: 14px; border-radius: 16px; }
+  .workspace-search { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .workspace-search > button, .workspace-search > .workspace-scope { grid-column: auto; }
+  .workspace-form { grid-template-columns: minmax(0, 1fr); }
+  .workspace-form > label, .scope-details label { min-width: 0; }
+  .workspace-form input, .workspace-form select, .workspace-search input, .workspace-search select,
+  .workspace-request-date input, .scope-details input, .scope-details select { min-width: 0; max-width: 100%; }
+  .workspace-row { gap: 10px; }
+  .workspace-actions { margin-left: 0; }
+  .workspace-actions .btn, .workspace-shortcuts a, .workspace-contract .btn { width: 100%; }
+  .workspace-shortcuts { flex-direction: column; }
+  .hiring-journey { grid-template-columns: minmax(0, 1fr); }
+  .journey-step { align-items: center; }
+  .profile-photo-picker { align-items: flex-start; flex-direction: column; }
+  .profile-photo-copy { width: 100%; }
+  .candidate-profile-details { grid-template-columns: minmax(0, 1fr); }
+  .candidate-profile-summary { grid-template-columns: minmax(0, 1fr); }
+  .candidate-profile-summary div:last-child, .candidate-profile-summary div:nth-child(3) { grid-column: auto; }
+  .workspace-contract header { min-width: 0; }
+  .workspace-contract header strong, .workspace-contract header span { overflow-wrap: anywhere; }
+  .btn { white-space: normal; text-align: center; }
+  .workspace-card-heading .match-score-badge { align-self: flex-start; }
+}
+
+@media (max-width: 360px) {
+  .main { padding-right: 10px; padding-left: 10px; }
+  .workspace-card { padding: 12px; }
+  .workspace-stat-grid { grid-template-columns: minmax(0, 1fr); }
+  .topbar-actions { gap: 8px; }
+  .brand strong { font-size: 1.4rem; }
+}
